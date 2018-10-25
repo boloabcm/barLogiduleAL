@@ -1,0 +1,6 @@
+Makefile
+build-esp8266-*
+config.h*
+!config.h.in
+*.save*
+*.swp
