@@ -1,17 +1,29 @@
 /*
-Length: 2m
-Nb logidule per line: 50 pcs
+Project: Bar Logidule ArtLab
+File: barLogidule.ino
+Version: 0.2
+Create by: Rom1 <rom1@canel.ch> - CANEL - https://www.canel.ch
+Date: 25/10/18
+License: GNU GENERAL PUBLIC LICENSE v3
+Language: Arduino (C/C++)
+Description: Work of art based on logidule for the ArtLab - EPFL
 */
-#include "config.h"
+#include <ArduinoOTA.h>
+#include <ESP8266mDNS.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <FS.h>
 #include <stdlib.h>
+#include <WiFiUdp.h>
 
-#define CLK_PIN D1
-#define START_SHIFT_PIN D0
+#define CLK_PIN D7
+#define START_SHIFT_PIN D8
 
-long int clk = 150;			/* Clock in ms */
+char *hostName = "logidule";
+char *wifi_pw  = "kohphiepheija1T";
+char *ota_pw  = "Ieyae9oa";
+
+long int clk = 230;			/* Clock in ms */
 long int rtime = 0;
 int clk_state = 0;
 
@@ -49,25 +61,53 @@ void setup(void)
   Serial.println("Settings OK");
 
   /* Host AP */
-  //bool wifi_ap_res = WiFi.softAP("logidule", "1234567890", 1, false, 1);
-  bool wifi_ap_res = WiFi.softAP("logidule", "1234567890");
+  bool wifi_ap_res = WiFi.softAP(hostName, wifi_pw, 1, true, 1);
   if(wifi_ap_res == true)
     Serial.println("Access Point configured");
   else
     Serial.println("Access Point not configured");
-  /* WIFI */
-  /*
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  while(WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(".");
-  }
-    */
+
   Serial.println();
   Serial.print("WiFi connected with the address ");         
   Serial.println(WiFi.localIP());
+
+  /* OTA - On The Air */
+  ArduinoOTA.setPort(8266);
+  ArduinoOTA.setHostname(hostName);
+  ArduinoOTA.setPassword(ota_pw);
+
+  ArduinoOTA.onStart([]()
+  {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH)
+      type = "sketch";
+    else
+      type = "filesystem";
+
+    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+    Serial.println("Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) {
+      Serial.println("Auth Failed");
+    } else if (error == OTA_BEGIN_ERROR) {
+      Serial.println("Begin Failed");
+    } else if (error == OTA_CONNECT_ERROR) {
+      Serial.println("Connect Failed");
+    } else if (error == OTA_RECEIVE_ERROR) {
+      Serial.println("Receive Failed");
+    } else if (error == OTA_END_ERROR) {
+      Serial.println("End Failed");
+    }
+  });
+  ArduinoOTA.begin();
 
   /* SPIFFS */
   if(SPIFFS.begin())
@@ -107,6 +147,7 @@ void loop(void)
     rtime = millis();
   }
   serverHTTP.handleClient();
+  ArduinoOTA.handle();
 }
 
 int cntArrayVal(int array[])
@@ -163,8 +204,6 @@ String homePage(void)
   page += "<html lang=fr-CH><header>";
   page +=   "<meta charset='utf-8'/>";
   page +=   "<title>LOGIDULE: Art'Lab EPFL</title>";
-  //page += "<style>input[type=checkbox]{display:None;} input[type=checkbox]+label{background: url(/img/led_on.png);display:inline-block;} input[type=checkbox]+label{background: url(/img/led_off.png);display:inline-block;}</style>";
-  //page += "<style>.checker input[type=checkbox]{}</style>";
   page += "</header><body>";
   page +=   "<h1>LOGIDULE</h1>";
   page +=   "<form action='/' method='POST' id='form'>";
@@ -180,33 +219,11 @@ String homePage(void)
   for(int i=0 ; i < led_array_size ; i++)
   {
     if(led_array[i] != 0)
-    {
       page +=         "<td><input type='checkbox' id='led_" + String(i) + "' name='led_" + String(i) + "'"
                               "oninput='document.getElementById(\"form\").submit()' checked /></td>";
-    /*
-      page +=     "<td>";
-      page +=         "<label class='checker'>";
-      page +=         "<input type='checkbox' id='led_check' name='led_" + String(i) + "'"
-                              "oninput='document.getElementById(\"form\").submit()' checked />";
-      page +=         "<span class='ledmark'></span>";
-      page +=         "</label>";
-      page +=     "</td>";
-                              */
-    }
     else
-    {
       page +=     "<td><input type='checkbox' id='led_" + String(i) + "' name='led_" + String(i) + "'"
                               "oninput='document.getElementById(\"form\").submit()' /></td>";
-    /*
-      page +=     "<td>";
-      page +=         "<label class='checker'>";
-      page +=         "<input type='checkbox' id='led_check' name='led_" + String(i) + "'"
-                              "oninput='document.getElementById(\"form\").submit()' />";
-      page +=         "<span class='ledmark'></span>";
-      page +=         "</label>";
-      page +=     "</td>";
-                              */
-    }
   }
   page +=     "</tr>";
   page +=     "<noscript><tr><input type='submit' value='SAVE'/></tr></noscript>";
